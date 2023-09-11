@@ -6,19 +6,22 @@ function calculate_pq_in_IEEE_13_bus_system(file_path::String)
     # pmd_path = joinpath(dirname(pathof(PowerModelsDistribution)), "..")
     ipopt_solver = optimizer_with_attributes(Ipopt.Optimizer, "tol"=>1e-6, "print_level"=>0)
     eng = parse_file(file_path; import_all=true)
-    for bus_numer in eng["load"]
-        eng["load"][bus_numer]["dss"]["kw"] = 2 .* eng["load"][bus_numer]["dss"]["kw"]
-        eng["load"][bus_numer]["dss"]["kv"] = 2 .* eng["load"][bus_numer]["dss"]["kv"]
-        eng["load"][bus_numer]["dss"]["kvar"] = 2 .* eng["load"][bus_numer]["dss"]["kvar"]
+    new_eng = copy(eng)
+    for bus_index in keys(eng["load"])
+        new_eng["load"][bus_index]["dss"]["kw"] = 2 * (eng["load"][bus_index]["dss"]["kw"])
+        new_eng["load"][bus_index]["dss"]["kv"] = 2 * (eng["load"][bus_index]["dss"]["kv"])
+        new_eng["load"][bus_index]["dss"]["kvar"] = 2 * (eng["load"][bus_index]["dss"]["kvar"])
     end
-    for capacitor_num in eng["shunt"]
-        eng["shunt"]["capcitor_num"]["dss"]["kv"] = 2 .* eng["shunt"]["capcitor_num"]["dss"]["kv"]
-        eng["shunt"]["capcitor_num"]["dss"]["kvar"] = 2 .* eng["shunt"]["capcitor_num"]["dss"]["kvar"]
-    result = solve_mc_opf(eng, ACPUPowerModel, ipopt_solver)
-    print(eng)
+    for capacitor_num in keys(eng["shunt"])
+        new_eng["shunt"][capacitor_num]["dss"]["kv"] = 2 * (eng["shunt"][capacitor_num]["dss"]["kv"])
+        new_eng["shunt"][capacitor_num]["dss"]["kvar"] = 2 * (eng["shunt"][capacitor_num]["dss"]["kvar"])
+    end
+        result = solve_mc_opf(new_eng, ACPUPowerModel, ipopt_solver)
+    return result
 end
 
-printIn(calculate_pq_in_IEEE_13_bus_system("C:/Users/minboli/Desktop/IEEE 13 Bus Data/IEEE13_Assets.dss"))
+print(calculate_pq_in_IEEE_13_bus_system("C:/Users/minboli/Desktop/IEEE 13 Bus Data/IEEE13_Assets.dss"))
+
 
 
 
@@ -37,3 +40,8 @@ printIn(calculate_pq_in_IEEE_13_bus_system("C:/Users/minboli/Desktop/IEEE 13 Bus
 #   "transformer"    => Dict{String, Any}("xfm1"=>Dict{String, Any}("source_id"=>"transformer.xfm1", "polarity"=>[1, 1], "xfmrcode"=>"fdrxfmr", "status"=>ENABLED, "connections"=>[[1,…
 #   "shunt"          => Dict{String, Any}("cap1"=>Dict{String, Any}("source_id"=>"capacitor.cap1", "status"=>ENABLED, "model"=>CAPACITOR, "connections"=>[1, 2, 3], "controls"=>Dict{S…
 #   "load"           => Dict{String, Any}("634a"=>Dict{String, Any}("source_id"=>"load.634a", "qd_nom"=>[110.0], "status"=>ENABLED, "model"=>POWER, "connections"=>[1, 4], "vm_nom"=>0…
+
+
+
+
+
