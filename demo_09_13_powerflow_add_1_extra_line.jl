@@ -1,0 +1,37 @@
+using Markdown
+
+using InteractiveUtils
+
+using PowerModelsDistribution
+
+using Ipopt
+
+#two method: 1. modify source file 2.modify the map
+
+function calculate_pq_in_IEEE_13_bus_system(file_path::String)
+
+    # pmd_path = joinpath(dirname(pathof(PowerModelsDistribution)), "..")
+
+    ipopt_solver = optimizer_with_attributes(Ipopt.Optimizer, "tol"=>1e-6, "print_level"=>0)
+
+    eng = parse_file(file_path; import_all=true)
+
+    inner_1_dict = Dict()
+
+    merge!(eng["line"],inner_1_dict)
+
+    inner_2_dict = Dict("cm_ub" => [600.0, 600.0, 600.0], "xs" => [0.0006538817022491176 0.00029905822308853955 0.0002414639381590914; 0.00029905822308853955 0.0006327557752920938 0.000273148993089014; 0.0002414639381590914 0.000273148993089014 0.0006457537846387695], "f_connections" => [1, 2, 3], "length" => 304.8, "status" => ENABLED,"g_to" => [6.025682501483262e-20 -6.177763089126175e-19 2.973359093960947e-19; 1.996791648007961e-19 5.162500306287831e-19 6.652268504673143e-20; 2.26017095812334e-19 -9.751455668507248e-19 5.826219036092083e-19],"g_fr" => [6.025682501483262e-20 -6.177763089126175e-19 2.973359093960947e-19; 1.996791648007961e-19 5.162500306287831e-19 6.652268504673143e-20; 2.26017095812334e-19 -9.751455668507248e-19 5.826219036092083e-19], "source_id" => "line.680684", "t_connections" => [1, 2, 3], "f_bus" => "680", "b_fr" => [0.004805512823442918 -0.0014567462508320475 -0.0006153036734985751; -0.0014567462508320462 0.00515018657437448 -0.0011505055096673884; -0.000615303673498571 -0.001150505509667395 0.004699469087161511], "t_bus" => "684", "b_to" => [0.004805512823442918 -0.0014567462508320475 -0.0006153036734985751; -0.0014567462508320462 0.00515018657437448 -0.0011505055096673884; -0.000615303673498571 -0.001150505509667395 0.004699469087161511], "rs" => [0.00021148472867486568 9.800311710581962e-5 9.610610879763823e-5; 9.800311710581962e-5 0.00021792362797144773 9.93018937920047e-5; 9.610610879763823e-5 9.93018937920047e-5 0.0002139460774958234])
+
+    inner_3_dict = Dict("length" => 1000.0, "name" => "680684", "phases" => 3, "bus1" => "680.1.2.3", "units" => "ft", "geometry" => "601", "bus2" => "684.1.2.3")
+
+    inner_1_dict["680684"] = inner_2_dict
+
+    inner_2_dict["dss"]=inner_3_dict
+
+    return result = solve_mc_opf(eng, ACPUPowerModel, ipopt_solver)
+
+end
+
+ 
+
+print(calculate_pq_in_IEEE_13_bus_system("C:/Users/minboli/Desktop/IEEE 13 Bus Data/IEEE13_Assets.dss"))
