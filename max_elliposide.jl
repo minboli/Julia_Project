@@ -9,7 +9,7 @@ model = Model(GLPK.Optimizer)
 
 for i = 1:m
     Ai = A[i, :]
-    @constraint(model, [i=1:m], norm(B * A[i, :]', 2) + dot(A[i, :], d) <= b[i])
+    @constraint(model, norm(B * A[i, :]', 2) + dot(A[i, :], d) <= b[i])
 end
 
 optimize!(model)
