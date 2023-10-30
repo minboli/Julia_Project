@@ -2,6 +2,8 @@ using JumMP
 using Gurobi
 using MAT
 
+# p0_l[22396.933451261204 20433.942334905685 2817.881123785768 18600.501848609787 15646.089717835575 11002.903590654676 11476.806469442356 4116.777555193412 4441.147300507716 8032.013526761144 10416.915909841076 12053.363095325007 9999.15107908198 13615.136075745988 14077.470285944037 15417.197441031038 18456.938813201024 21476.05018255235 25075.94935614488; 23464.946463324017 21485.444802792652 3704.417694766462 20312.37579903897 17391.591269554312 12715.725656843262 12262.451938679214 4844.505608147543 4505.908479451923 7954.812922118911 10427.468701887095 12153.471261408336 10101.635806370345 13818.902063309302 14228.885311390806 15488.348797264776 18675.84408000575 21605.601390059317 25376.446498947877; 25145.064060659275 23065.243462217797 5348.316625021436 22582.02329347371 19701.77993275694 15172.420640461542 14149.744643299957 6806.767574011412 5987.457407416163 9306.194249348002 11820.836744262235 13787.519256943368 11695.854491434977 15780.947743570672 16111.383606586098 17730.956705317138 20918.591575606406 23598.38145913823 27308.457859842572]
+# p0_u[33216.93073665574 38442.297432983076 24382.36111736993 42467.87794842872 41360.42483231878 39128.21192753515 41449.86988618627 34742.26043464768 35177.3469576185 38635.27451668472 40401.697431211236 40874.29256184455 37096.79361523036 39086.12910024885 36524.597371582895 34444.00139635821 33774.432383566564 32780.91845370007 32533.480067532524; 34477.881040104636 39814.916733277365 25653.425729381437 44616.90560826637 43586.19027170264 41354.68361042942 42769.9814479402 36016.088228507375 35790.18212890554 39103.77740227789 40946.92526770904 41488.32248962792 37682.47123212602 39744.082300011854 37076.279401268985 34854.43010378224 34266.47225866545 33112.05295242061 32949.220592054575; 36119.43137898035 41330.52564596049 27220.459310087692 46799.78930845112 45801.544360987995 43709.35427321434 44550.43689067198 37869.18742080435 37162.1736397122 40346.07516458815 42233.41427968478 43019.639938522276 39180.101927769756 41615.3380895472 38878.766202084866 37029.21806267486 36454.621428786115 35064.53746827854 34857.295225468064]
 #introduce u W D b
 file_u = matopen(raw"C:\Users\minboli\Desktop\matlab data\Xincode\Xincode\u.mat")
 u = read(file_u,"u")
@@ -18,80 +20,90 @@ D = read(file_D,"D")
 n = length(u)
 m = length(b)
 #first step, define the master problem
-function master_problem(u, b, n, m,constraint_generation_column)
+function master_problem(lambda,mu)
     model1 = Model(Gurobi.Optimizer)
-    @variable(model1, p_max)
-    @variable(model1, p_min)
-    @variable(model1, lambda[1:n])
-    @variable(model1, mu[1:m])
+
+    b_row = size(b)[1]
+    if length(size(b)) ==1
+        b_col = 1
+    else
+        b_col = size(b)[2]
+
+    m = length(u)
+    n = lenght(b)
+
+    @variable(model1, p_max[1:b_col,1:b_row])
+    @variable(model1, p_min[1:b_col,1:b_row])
 
     @objective(model1, Max, p_max - p_min)
     
+    part1 = u'*lambda
+    
     for i in 1:m
         if value(mu[i]) >= 0
-            for j in length(constraint_generation_column)
-                @constraint(model1, constraint_generation_column[j][1] >= 0)
-            end
+            part2 += (reshape(p_max,:,1)[i]-b)'*mu
         else
-            for  j in length(constraint_generation_column)
-                @constraint(model1, constraint_generation_column[j][2] >= 0)
-            end    
-        end
+            part2 += (reshape(p_min,:,1)[i]-b)'*mu
     end
     
-
+    constraint_formula = part1+part2
+    @constraint(model1,constraint_formula>=0)
     optimize!(model1)
     
     p_max_update = value.(p_max)
     p_min_update = value.(p_min)
-    lambda_update = value.(lambda)
-    mu_update = value.(mu)
+    
 
-    return p_max_update, p_min_update, lambda_update, mu_update
+    return constraint_formula,p_max_update, p_min_update
 end
 
-function sub_problem(lambda, mu, u, b, W, D, p_max, p_min, n, m)
+function sub_problem(p_max, p_min, n, m, z, p, b, W, D) 
     model2 = Model(Gurobi.Optimizer)
-    @variable(model2, lambda[1:n])
-    @variable(model2, mu[1:m])
-    @variable(model2, mu_p[1:m])
-
-    objective_expr = lambda' * u + sum(mu_p[i] - mu[i] * b[i] for i in 1:m)
-    
-    @objective(model2, Min, objective_expr)
-    @constraint(model2, lambda' * W + mu' * D == 0)
-
-    for i in 1:m
-        @constraint(model2, mu_p[i] =min(mu[i] * p_max[i],mu[i] * p_min[i]))
         
+    @variable(model2, lambda[1:n] >= 0)
+    @variable(model2, mu[1:m])
+    @variable(model2, p[1:m])
+        
+    @objective(model2, Min, lambda' * z + mu' * (p - b))
+        
+    @constraint(model2, lambda' * W + mu' * D == 0)
+    @constraint(model2, p .<= p_max)
+    @constraint(model2, p .>= p_min)
+    
+    for i in 1:m
+        @constraint(model2, p[i] == p_max[i] => {mu[i] >= 0})
+        @constraint(model2, p[i] == p_min[i] => {mu[i] <= 0})
     end
-
+    
     optimize!(model2)
     
-    lambda_new = value.(lambda)
-    mu_new = value.(mu)
-    mu_p_new = value.(mu_p)
-
-    return lambda_new, mu_new, mu_p_new
+    s = objective_value(model2)
+    lambda_update = value.(lambda)
+    mu_update = value.(mu)
+    return s, lambda_update, mu_update
 end
 
 function constraint_generation()
-    max_iteration = 1e10
-    additional_constraints = [[Z' * lambda_origin + (p_max_val - b)' * mu_origin],[Z' * lambda_origin + (p_min_val - b)' * mu_origin]]
-    for i in 1:max_iteration
-        lambda_new, mu_new, mu_p_new = sub_problem(lambda_val, mu_val, u, b, W, D, p_min, p_max, n, m)
-        subproblem_obj = dot(lambda_new, u) + sum(mu_p_new[i] - mu_new[i] * b[i] for i in 1:m)    
+    iteration_times = 0
+    while iteration_times < 1e20
+        iteration_times += 1
+        if iteration_times ==1
+            #first time p_max/p_min need to be estimated 
+            p_max = [22396.933451261204 20433.942334905685 2817.881123785768 18600.501848609787 15646.089717835575 11002.903590654676 11476.806469442356 4116.777555193412 4441.147300507716 8032.013526761144 10416.915909841076 12053.363095325007 9999.15107908198 13615.136075745988 14077.470285944037 15417.197441031038 18456.938813201024 21476.05018255235 25075.94935614488; 23464.946463324017 21485.444802792652 3704.417694766462 20312.37579903897 17391.591269554312 12715.725656843262 12262.451938679214 4844.505608147543 4505.908479451923 7954.812922118911 10427.468701887095 12153.471261408336 10101.635806370345 13818.902063309302 14228.885311390806 15488.348797264776 18675.84408000575 21605.601390059317 25376.446498947877; 25145.064060659275 23065.243462217797 5348.316625021436 22582.02329347371 19701.77993275694 15172.420640461542 14149.744643299957 6806.767574011412 5987.457407416163 9306.194249348002 11820.836744262235 13787.519256943368 11695.854491434977 15780.947743570672 16111.383606586098 17730.956705317138 20918.591575606406 23598.38145913823 27308.457859842572]
+            p_min = [33216.93073665574 38442.297432983076 24382.36111736993 42467.87794842872 41360.42483231878 39128.21192753515 41449.86988618627 34742.26043464768 35177.3469576185 38635.27451668472 40401.697431211236 40874.29256184455 37096.79361523036 39086.12910024885 36524.597371582895 34444.00139635821 33774.432383566564 32780.91845370007 32533.480067532524; 34477.881040104636 39814.916733277365 25653.425729381437 44616.90560826637 43586.19027170264 41354.68361042942 42769.9814479402 36016.088228507375 35790.18212890554 39103.77740227789 40946.92526770904 41488.32248962792 37682.47123212602 39744.082300011854 37076.279401268985 34854.43010378224 34266.47225866545 33112.05295242061 32949.220592054575; 36119.43137898035 41330.52564596049 27220.459310087692 46799.78930845112 45801.544360987995 43709.35427321434 44550.43689067198 37869.18742080435 37162.1736397122 40346.07516458815 42233.41427968478 43019.639938522276 39180.101927769756 41615.3380895472 38878.766202084866 37029.21806267486 36454.621428786115 35064.53746827854 34857.295225468064]
+            s1_tempt,lambda_tempt,mu_tempt = sub_problem(p_max,p_min, n, m, z, p, b, W, D)
+            constraint_formula_tempt,p_max_update,p_min_update = master_problem(lambda_tempt,mu_tempt)
+            iteration += 1
+        s1_iteration,lambda_iteration,mu_iteration = sub_problem(p_max_update,p_min_update, n, m, z, p, b, W, D)
         
-        if subproblem_obj > =0
+        if s1_iteration == 0
             break
-        end
-        
-        if subproblem_obj < 0
-            new_lambda, new_mu,new_mu_P = sub_problem(lambda, mu, u, b, W, D, p_max, p_min, n, m)
-            push!(additional_constraints,[Z' * new_lambda + (p_max_val - b)' * new_mu],[Z' * new_lambda + (p_min_val - b)' * new_mu])
-            
-_
-
-
+        else
+            costraint_formula_iteration,p_max_update,p_min_update = master_problem(lambda_iteration,mu_iteration)
+            add_constraint(master_problem,constraint_formula_iteration)
+    end 
+    constraint_final,p_max_final,p_min_final = master_problem(lambda_iteration,mu_iteration)
+    return p_max_final - p_min_final
+end
 
 
