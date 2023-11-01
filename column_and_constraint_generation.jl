@@ -40,14 +40,14 @@ function CCP(z,z_row,z_col,D,D_row,D_col,W,W_row,W_col,b,b_row,b_col,p_max_initi
     #master probelm
     model1 = Model(Gurobi.Optimizer)
     
-    @variable(model1, p_max[1:b_col,1:b_row])
-    @variable(model1, p_min[1:b_col,1:b_row])
+    @variable(model1, p_max[1:b_row,1:b_col])
+    @variable(model1, p_min[1:b_row,1:b_col])
 
     @objective(model1,Max,p_max-p_min)
 
     part1 = z'*lambda
-    for i in 1:m
-        if value(mu[i]) >= 0
+    for i in 1:b_row
+        if mu[i] >=0
             part2 += (reshape(p_max,:,1)[i]-b[i])'*mu[i]
         else
             part2 += (reshape(p_min,:,1)[i]-b[i])'*mu[i]
@@ -97,7 +97,7 @@ function CCP(z,z_row,z_col,D,D_row,D_col,W,W_row,W_col,b,b_row,b_col,p_max_initi
             break
         else
             part1_updated = z'*lambda_initial
-            for i in 1:m
+            for i in 1:b_row
                 if value(mu_initial[i]) >= 0
                     part2_updated += (reshape(optimized_p_max,:,1)[i]-b[i])'*mu_initial[i]
                 else
